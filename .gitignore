@@ -1,0 +1,19 @@
+# Build outputs and local UI previews
+*.exe
+*.pdb
+preview*.png
+bin/
+obj/
+
+# Editor and local configuration
+.vs/
+.vscode/
+*.user
+*.suo
+*.tmp
+.env
+.env.*
+
+# Personal runtime settings (normally stored in LocalAppData)
+rules.xml
+pause.xml
