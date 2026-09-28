@@ -27,7 +27,7 @@ static class Preview {
                 bitmap.Save("preview-edit.png");
             }
         }
-        using(var form = new PauseDialog(new PauseSettings { Enabled=true })) {
+        using(var form = new ScheduledPauseDialog(null)) {
             Prepare(form); form.PerformLayout();
             using(var bitmap = new Bitmap(form.Width, form.Height)) {
                 form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
