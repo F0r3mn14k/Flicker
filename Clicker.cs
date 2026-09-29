@@ -187,7 +187,7 @@ class ClickerForm : GradientForm {
     }
     static Button Button(string text, EventHandler action) { var b = new ModernButton { Text = text, Width = 130, Height = 42, Margin = new Padding(0,0,8,0), Danger = text.StartsWith("Stop") || text.StartsWith("Usuń") }; b.Click += action; return b; }
     public static List<string> ActionNames() { var names=KeyNames(); names.AddRange(new string[] { MouseInput.Left, MouseInput.Right, MouseInput.Middle }); return names; }
-    public static List<string> KeyNames() { var names = new List<string>(); for (char c = 'A'; c <= 'Z'; c++) names.Add(c.ToString()); for (int i=0;i<10;i++) names.Add("D"+i); names.AddRange(new string[] { "Space", "Enter", "Tab", "Escape", "Back", "Delete", "Insert", "Home", "End", "PageUp", "PageDown", "Up", "Down", "Left", "Right" }); for(int i=1;i<=12;i++) if(i!=8 && i!=9) names.Add("F"+i); return names; }
+    public static List<string> KeyNames() { var names = new List<string>(); for (char c = 'A'; c <= 'Z'; c++) names.Add(c.ToString()); for (int i=0;i<10;i++) names.Add("D"+i); names.AddRange(new string[] { "Space", "Enter", "Tab", "Escape", "Back", "Delete", "Insert", "Home", "End", "PageUp", "PageDown", "Up", "Down", "Left", "Right", "Oemtilde" }); for(int i=1;i<=12;i++) if(i!=8 && i!=9) names.Add("F"+i); return names; }
     protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e); if(previewOnly) return; bool a = Keyboard.RegisterHotKey(Handle, 1, 0x4000, (uint)Keys.F8); bool b = Keyboard.RegisterHotKey(Handle, 2, 0x4000, (uint)Keys.F9); hotkeyReady = b; if(!a || !b) status.Text = "Nie udało się zarejestrować skrótów. Zamknij inne aplikacje używające F8/F9 i uruchom ponownie."; }
     protected override void OnHandleDestroyed(EventArgs e) { Keyboard.UnregisterHotKey(Handle,1); Keyboard.UnregisterHotKey(Handle,2); base.OnHandleDestroyed(e); }
     protected override void WndProc(ref Message m) { if(m.Msg == 0x0312) { if(KeyPicker.Listening!=null && !running) { KeyPicker.Listening.Accept(m.WParam.ToInt32()==1 ? Keys.F8 : Keys.F9); return; } if(m.WParam.ToInt32()==1) Toggle(); if(m.WParam.ToInt32()==2) Stop("Zatrzymano przez F9."); } base.WndProc(ref m); }
@@ -272,7 +272,7 @@ class ClickerForm : GradientForm {
         try {
             grid.Rows.Clear();
             foreach(var r in rules) {
-                string action=r.IsPause?"Wstrzymaj":r.Key+(MouseInput.IsMouse(r.Key)?" ("+r.MouseX+", "+r.MouseY+")":"");
+                string action=r.IsPause?"Wstrzymaj":KeyPicker.DisplayName(r.Key)+(MouseInput.IsMouse(r.Key)?" ("+r.MouseX+", "+r.MouseY+")":"");
                 string schedule=r.IsPause?"Od "+r.Time+(r.PauseByDuration?" na "+r.PauseMinutes+" min":" do "+r.PauseEnd):(r.Mode==Interval?"Co "+r.Seconds+" s":"Codziennie "+r.Time)+" + 0–"+r.MaxDelayMs+" ms; trzymaj "+r.HoldMinMs+"–"+r.HoldMaxMs+" ms";
                 grid.Rows.Add(r.Enabled,action,schedule,"—",r.IsPause?(object)"—":r.Count);
             }

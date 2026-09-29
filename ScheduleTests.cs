@@ -44,12 +44,22 @@ static class ScheduleTests {
             picker.Accept(Keys.F9); Check(picker.SelectedKey=="Tab","Stop hotkey reserved");
             picker.SelectedKey=MouseInput.Right; Check(MouseInput.IsMouse(picker.SelectedKey),"Mouse selection retained");
             var button=picker.Controls[0];
-            foreach(var code in new Keys[] { Keys.A, Keys.Enter, Keys.Tab, Keys.Escape, Keys.Space, Keys.Left }) {
+            foreach(var code in new Keys[] { Keys.A, Keys.Enter, Keys.Tab, Keys.Escape, Keys.Space, Keys.Left, Keys.Oemtilde }) {
                 picker.BeginListening();
                 var message=Message.Create(button.Handle,0x100,new IntPtr((int)code),IntPtr.Zero);
                 Check(button.PreProcessMessage(ref message),"Capture handles key before button/dialog: "+code);
                 Check((Keys)Enum.Parse(typeof(Keys),picker.SelectedKey)==code,"Captured through WinForms pipeline: "+code);
                 Check(KeyPicker.Listening==null,"Capture ends after selection");
+            }
+            Check(picker.SelectedKey=="Oemtilde","Backtick canonical key name");
+            Check(KeyPicker.DisplayName(picker.SelectedKey)=="` / ~","Backtick readable label");
+            var down=Keyboard.Events(picker.SelectedKey)[0];
+            var up=Keyboard.Events(picker.SelectedKey)[1];
+            Check(down.data.key.scan!=0 && down.data.key.scan==up.data.key.scan && (down.data.key.flags&2)==0 && (up.data.key.flags&2)!=0,"Backtick down/up scan code");
+            using(var memory=new MemoryStream()) {
+                var xml=new XmlSerializer(typeof(Rule)); xml.Serialize(memory,new Rule { Key=picker.SelectedKey }); memory.Position=0;
+                var loaded=(Rule)xml.Deserialize(memory);
+                Check(loaded.Key=="Oemtilde" && ClickerForm.ActionNames().Contains(loaded.Key),"Backtick saved rule accepted on reload");
             }
         }
         Console.WriteLine("PASS: keyboard capture, pause duration/end time, midnight, overlap, disabled rows, persistence and legacy defaults.");

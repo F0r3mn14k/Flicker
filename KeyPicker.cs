@@ -10,7 +10,7 @@ class KeyPicker : UserControl {
     public event EventHandler SelectedKeyChanged;
     public string SelectedKey {
         get { return selectedKey; }
-        set { selectedKey=value; capture.Text=value; if(SelectedKeyChanged!=null) SelectedKeyChanged(this,EventArgs.Empty); }
+        set { selectedKey=value; capture.Text=DisplayName(value); if(SelectedKeyChanged!=null) SelectedKeyChanged(this,EventArgs.Empty); }
     }
     public KeyPicker() {
         Height=32; Width=230;
@@ -27,7 +27,8 @@ class KeyPicker : UserControl {
         Disposed+=delegate { Cancel(); menu.Dispose(); };
     }
     public void BeginListening() { if(Listening!=null) Listening.Cancel(); Listening=this; capture.Text="Naciśnij klawisz…"; }
-    public void Cancel() { if(Listening==this) Listening=null; capture.Text=selectedKey; }
+    public static string DisplayName(string name) { return name=="Oemtilde" ? "` / ~" : name; }
+    public void Cancel() { if(Listening==this) Listening=null; capture.Text=DisplayName(selectedKey); }
     public void Accept(Keys key) {
         foreach(string name in ClickerForm.KeyNames()) {
             if((Keys)Enum.Parse(typeof(Keys),name)!=key) continue;
