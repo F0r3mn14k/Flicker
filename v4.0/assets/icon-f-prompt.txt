@@ -1,0 +1,4 @@
+Status: proposal awaiting user approval; not embedded in the application yet.
+Tool: built-in ImageGen.
+Prompt:
+Use case: logo-brand. Asset type: Windows desktop application icon concept, one square icon. Create a single elegant bold calligraphic uppercase letter "F", cream ivory ink, centered on a saturated deep teal rounded-square tile with a subtle lighter turquoise gradient. The F is recognizable at 32px: broad expressive pen strokes, one modest flowing flourish, no hairlines or elaborate loops. Clean crisp edges, warm inviting confident contemporary design, high contrast, flat graphic with very subtle depth, no 3D mockup, no keyboard, no extra text, no surrounding objects. Fill nearly all square canvas with the rounded tile, transparent outside corners. This is a proposal for user approval.

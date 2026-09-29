@@ -4,7 +4,6 @@
 preview*.png
 bin/
 obj/
-releases/
 
 # Editor and local configuration
 .vs/
@@ -18,7 +17,3 @@ releases/
 # Personal runtime settings (normally stored in LocalAppData)
 rules.xml
 pause.xml
-
-# Local version archives
-v1.0/*.zip
-v1.0/SHA256.txt
