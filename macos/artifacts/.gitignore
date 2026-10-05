@@ -1,0 +1,3 @@
+# Local publish outputs. Recreate with publish-macos.sh.
+*
+!.gitignore
