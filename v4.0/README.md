@@ -27,6 +27,8 @@ Edytor obsługuje jeden scenariusz w każdym profilu, od 1 do 10000 powtórzeń,
 
 Kliknij **Profile: nazwa** w głównym oknie. **Nowy** tworzy pusty profil, **Kopia** kopiuje zaznaczony, **Nazwa** zmienia nazwę, a **Usuń** usuwa profil z biblioteki (ostatni profil musi pozostać). Każdy zawiera niezależną listę akcji, wstrzymania oraz sekwencję z liczbą powtórzeń.
 
+Lista rozwijana w głównym oknie pozwala od razu wybrać profil bez otwierania zarządzania. Przycisk **Profile…** otwiera pełne zarządzanie. Użyj **Przypnij**, aby oznaczyć ważny profil gwiazdką; przypięte profile są na początku listy, a pozostałe są uporządkowane alfabetycznie.
+
 Wybierz profil i kliknij **Zastosuj profil**, aby zapisać zmiany w oknie i aktywować zaznaczony profil. **Anuluj** lub zamknięcie tego okna odrzuca zmiany w bibliotece. Zmiany akcji i sekwencji w aktywnym profilu zapisują się automatycznie. Przełączanie profili jest dostępne po zatrzymaniu działania.
 
 **Eksportuj** zapisuje zaznaczony profil do pliku `*.flicker.xml`. Wybierz lokalizację w oknie zapisu. Plik zawiera nazwę, akcje, punkty myszy, harmonogramy i sekwencję; nie zawiera liczników ani stanu uruchomienia. Eksport jest wykonywany od razu, niezależnie od późniejszego anulowania okna profili.
@@ -52,3 +54,15 @@ Profile: Profiles.cs (format i zapis), ProfileUI.cs (zarządzanie), ProfileTests
 Pola interwału, opóźnienia, przytrzymania, minut wstrzymania, czasu kroku oraz liczby powtórzeń mają zsynchronizowane suwaki. Nadal można wpisywać dokładne liczby — przesunięcie wskaźnika nie zaokrągla wartości wpisanej ręcznie. Duże zakresy używają skali nieliniowej, dokładniejszej dla małych wartości. Strzałki zmieniają wartość o krok pola, Home/End wybierają granice zakresu. Godziny oraz współrzędne pozostają w polach precyzyjnych.
 
 Przytrzymanie to teraz jedna stała wartość (1–5000 ms), domyślnie 80 ms dla nowych akcji. Starsze profile zachowują zakres do momentu zapisania edycji wpisu; edytor pokazuje wcześniejszy zakres i proponuje jego górną wartość jako stały czas. Anulowanie nie zmienia wpisu. Format importu i eksportu pozostaje zgodny.
+
+## Kolejność harmonogramu
+
+Kliknij **Kolejność**, aby włączyć osobny tryb układania listy. W nim przeciągnij wpis na docelowy wiersz albo użyj **↑ Góra** i **↓ Dół**. Zmiana zapisuje się od razu w aktywnym profilu. W tym trybie dodawanie, edycja, usuwanie i checkboxy są wyłączone; kliknij **Gotowe**, aby wrócić do zwykłej pracy. Harmonogram musi być zatrzymany.
+
+## Wpis master podczas wstrzymania
+
+W edycji zwykłej akcji zaznacz **Master: działa podczas wstrzymania**. Tylko zaznaczony wpis będzie nadal wykonywany w okresie zaplanowanego wstrzymania; pozostałe wpisy pozostają wstrzymane. Ta opcja nie omija F9, Stop, aktywnego okna Flickera ani kontroli zajętego przycisku myszy. Jest zapisywana w profilu i eksporcie. Wpisy istniejące przed dodaniem funkcji mają ją domyślnie wyłączoną.
+
+## Ręczna pauza
+
+Podczas działania użyj **Pauza · F7**. Zatrzymuje wszystkie wpisy, również master, i zwalnia aktualnie przytrzymany klawisz lub przycisk myszy. **Wznów · F7** przesuwa oczekujące terminy o długość pauzy, więc interwały kontynuują odliczanie od miejsca zatrzymania. F9 oraz Stop kończą sesję całkowicie. Jeżeli F7 jest zajęty przez inną aplikację, przycisk Pauza/Wznów nadal działa, a Flicker wyświetla informację o niedostępnym skrócie.

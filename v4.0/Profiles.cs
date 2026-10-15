@@ -8,10 +8,11 @@ public class FlickerProfile {
     public int FormatVersion { get; set; }
     public string Id { get; set; }
     public string Name { get; set; }
+    public bool Pinned { get; set; }
     public List<Rule> Rules { get; set; }
     public SequenceDocument Sequence { get; set; }
     public FlickerProfile() { FormatVersion=1; Id=Guid.NewGuid().ToString("N"); Name="Domyślny"; Rules=new List<Rule>(); Sequence=new SequenceDocument(); }
-    public override string ToString() { return Name; }
+    public override string ToString() { return Pinned ? "★ " + Name : Name; }
     public void Validate() {
         Guid id;
         if(FormatVersion!=1) throw new InvalidDataException("Nieobsługiwana wersja formatu profilu.");
@@ -28,7 +29,7 @@ public class FlickerProfile {
         Sequence.Validate();
     }
     public FlickerProfile Copy() {
-        var copy=new FlickerProfile { Id=Id,Name=Name,FormatVersion=FormatVersion };
+        var copy=new FlickerProfile { Id=Id,Name=Name,Pinned=Pinned,FormatVersion=FormatVersion };
         foreach(var rule in Rules) copy.Rules.Add(ClickerForm.CopyRule(rule));
         copy.Sequence.Repeats=Sequence.Repeats;
         foreach(var step in Sequence.Steps) copy.Sequence.Steps.Add(step.Copy());
@@ -48,6 +49,11 @@ public class ProfileLibrary {
         if(Active==null) throw new InvalidDataException("Brak aktywnego profilu.");
     }
     public ProfileLibrary Copy() { var copy=new ProfileLibrary { ActiveId=ActiveId }; foreach(var p in Profiles) copy.Profiles.Add(p.Copy()); return copy; }
+    public List<FlickerProfile> Ordered() {
+        var ordered=new List<FlickerProfile>(Profiles);
+        ordered.Sort(delegate(FlickerProfile a,FlickerProfile b) { int pin=b.Pinned.CompareTo(a.Pinned); return pin!=0?pin:string.Compare(a.Name,b.Name,StringComparison.CurrentCultureIgnoreCase); });
+        return ordered;
+    }
     public string UniqueName(string requested) {
         string root=requested.Trim(); if(root.Length>65) root=root.Substring(0,65);
         string name=root; int n=2;

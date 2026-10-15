@@ -8,7 +8,7 @@ static class ProfileTests {
     static bool Reject(Action action) { try { action(); return false; } catch(Exception) { return true; } }
     public static void Run() {
         var profile=new FlickerProfile { Name="Zażółć gęślą jaźń" };
-        profile.Rules.Add(new Rule { Key="OemMinus",Count=42,Next=9,Pending=true });
+        profile.Pinned=true; profile.Rules.Add(new Rule { Key="OemMinus",Count=42,Next=9,Pending=true,AllowDuringPause=true });
         profile.Rules.Add(new Rule { Key=MouseInput.Right,MouseX=-80,MouseY=900 });
         profile.Rules.Add(new Rule { IsPause=true,Time="09:59:59",PauseMinutes=10 });
         profile.Sequence.Repeats=20; profile.Sequence.Steps.Add(new SequenceStep { Key="Oemplus" }); profile.Sequence.Steps.Add(new SequenceStep { Wait=true,Seconds=2 });
@@ -16,12 +16,13 @@ static class ProfileTests {
         using(var stream=new MemoryStream()) {
             new XmlSerializer(typeof(FlickerProfile)).Serialize(stream,profile); stream.Position=0;
             var imported=ProfileFiles.Read<FlickerProfile>(stream); imported.Validate();
-            Check(imported.Name==profile.Name && imported.Rules.Count==3 && imported.Sequence.Repeats==20 && imported.Sequence.Steps[1].Wait,"full export/import round trip");
+            Check(imported.Name==profile.Name && imported.Pinned && imported.Rules.Count==3 && imported.Rules[0].AllowDuringPause && imported.Sequence.Repeats==20 && imported.Sequence.Steps[1].Wait,"full export/import round trip");
             Check(imported.Rules[0].Count==0 && !imported.Rules[0].Pending && imported.Rules[0].Next==0,"runtime not exported");
             Check(imported.Rules[1].MouseX==-80 && imported.Rules[2].IsPause,"mouse and pause preserved");
         }
         var library=new ProfileLibrary { ActiveId=profile.Id }; library.Profiles.Add(profile);
         var copy=library.Import(profile); Check(copy.Id!=profile.Id && copy.Name!=profile.Name && library.ActiveId==profile.Id,"collision creates copy without activation");
+        Check(library.Ordered()[0]==profile,"pinned profile is first in quick selection");
         copy.Rules[0].Key="A"; copy.Sequence.Steps[0].Key="B"; Check(profile.Rules[0].Key=="OemMinus" && profile.Sequence.Steps[0].Key=="Oemplus","profiles independent");
         var edit=library.Copy(); edit.Profiles[0].Name="Edited"; Check(profile.Name!="Edited","cancel leaves original library intact");
         library.ActiveId=copy.Id;

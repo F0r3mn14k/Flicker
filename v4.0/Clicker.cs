@@ -22,6 +22,7 @@ public class Rule {
     public int MaxDelayMs { get; set; }
     public int HoldMinMs { get; set; }
     public int HoldMaxMs { get; set; }
+    public bool AllowDuringPause { get; set; }
     [XmlIgnore] public bool Pending;
     [XmlIgnore] public double Next;
     [XmlIgnore] public DateTime LastDay;
@@ -95,9 +96,11 @@ partial class ClickerForm : GradientForm {
     readonly FlowLayoutPanel editor = new FlowLayoutPanel();
     readonly Timer timer = new Timer();
     bool listPaused;
+    bool manualPaused, manualHotkeyReady;
+    double manualPausedAt;
     DateTime listPauseUntil;
 
-    readonly ModernButton pauseButton = new ModernButton();
+    readonly ModernButton pauseButton = new ModernButton(), manualPauseButton = new ModernButton();
     readonly Stopwatch monotonic = Stopwatch.StartNew();
     readonly string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FlickerV4", "rules.xml");
     bool running, hotkeyReady, refreshingRows, loadFailed;
@@ -131,10 +134,10 @@ partial class ClickerForm : GradientForm {
     }
     static Button Button(string text, EventHandler action) { var b = new ModernButton { Text = text, Width = 130, Height = 42, Margin = new Padding(0,0,8,0), Danger = text.StartsWith("Stop") || text.StartsWith("Usuń") }; b.Click += action; return b; }
     public static List<string> ActionNames() { var names=KeyNames(); names.AddRange(new string[] { MouseInput.Left, MouseInput.Right, MouseInput.Middle }); return names; }
-    public static List<string> KeyNames() { var names = new List<string>(); for (char c = 'A'; c <= 'Z'; c++) names.Add(c.ToString()); for (int i=0;i<10;i++) names.Add("D"+i); names.AddRange(new string[] { "Space", "Enter", "Tab", "Escape", "Back", "Delete", "Insert", "Home", "End", "PageUp", "PageDown", "Up", "Down", "Left", "Right", "Oemtilde", "OemMinus", "Oemplus", "Oemcomma", "OemPeriod", "Oem1", "Oem2", "Oem4", "Oem5", "Oem6", "Oem7", "Oem102" }); for(int i=1;i<=12;i++) if(i!=8 && i!=9) names.Add("F"+i); return names; }
-    protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e); if(previewOnly) return; bool a = Keyboard.RegisterHotKey(Handle, 1, 0x4000, (uint)Keys.F8); bool b = Keyboard.RegisterHotKey(Handle, 2, 0x4000, (uint)Keys.F9); hotkeyReady = b; if(!a || !b) status.Text = "Nie udało się zarejestrować skrótów. Zamknij inne aplikacje używające F8/F9 i uruchom ponownie."; }
-    protected override void OnHandleDestroyed(EventArgs e) { Keyboard.UnregisterHotKey(Handle,1); Keyboard.UnregisterHotKey(Handle,2); base.OnHandleDestroyed(e); }
-    protected override void WndProc(ref Message m) { if(m.Msg == 0x0312) { if(KeyPicker.Listening!=null && !running) { KeyPicker.Listening.Accept(m.WParam.ToInt32()==1 ? Keys.F8 : Keys.F9); return; } if(sequenceWindow!=null) { if(m.WParam.ToInt32()==1) sequenceWindow.Toggle(); else sequenceWindow.Halt("Zatrzymano przez F9."); return; } if(m.WParam.ToInt32()==1) Toggle(); if(m.WParam.ToInt32()==2) Stop("Zatrzymano przez F9."); } base.WndProc(ref m); }
+    public static List<string> KeyNames() { var names = new List<string>(); for (char c = 'A'; c <= 'Z'; c++) names.Add(c.ToString()); for (int i=0;i<10;i++) names.Add("D"+i); names.AddRange(new string[] { "Space", "Enter", "Tab", "Escape", "Back", "Delete", "Insert", "Home", "End", "PageUp", "PageDown", "Up", "Down", "Left", "Right", "Oemtilde", "OemMinus", "Oemplus", "Oemcomma", "OemPeriod", "Oem1", "Oem2", "Oem4", "Oem5", "Oem6", "Oem7", "Oem102" }); for(int i=1;i<=12;i++) if(i!=7 && i!=8 && i!=9) names.Add("F"+i); return names; }
+    protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e); if(previewOnly) return; bool a = Keyboard.RegisterHotKey(Handle, 1, 0x4000, (uint)Keys.F8); bool b = Keyboard.RegisterHotKey(Handle, 2, 0x4000, (uint)Keys.F9); manualHotkeyReady=Keyboard.RegisterHotKey(Handle,3,0x4000,(uint)Keys.F7); hotkeyReady = b; if(!a || !b) status.Text = "Nie udało się zarejestrować skrótów. Zamknij inne aplikacje używające F8/F9 i uruchom ponownie."; else if(!manualHotkeyReady) status.Text="Skrót F7 jest zajęty — ręczna pauza nadal działa przez przycisk."; RenderV2(); }
+    protected override void OnHandleDestroyed(EventArgs e) { Keyboard.UnregisterHotKey(Handle,1); Keyboard.UnregisterHotKey(Handle,2); Keyboard.UnregisterHotKey(Handle,3); base.OnHandleDestroyed(e); }
+    protected override void WndProc(ref Message m) { if(m.Msg == 0x0312) { int id=m.WParam.ToInt32(); if(KeyPicker.Listening!=null && !running) { KeyPicker.Listening.Accept(id==1 ? Keys.F8 : id==2 ? Keys.F9 : Keys.F7); return; } if(sequenceWindow!=null) { if(id==1) sequenceWindow.Toggle(); else if(id==2) sequenceWindow.Halt("Zatrzymano przez F9."); return; } if(id==1) Toggle(); if(id==2) Stop("Zatrzymano przez F9."); if(id==3) ToggleManualPause(); } base.WndProc(ref m); }
     SequenceForm sequenceWindow;
     void OpenSequence() { if(running || held.Count>0) { status.Text="Zatrzymaj harmonogram przed otwarciem sekwencji."; return; } if(!hotkeyReady) { status.Text="Skrót F9 jest niedostępny. Uruchom ponownie po zwolnieniu skrótu."; return; } if(library==null || loadFailed) { status.Text="Najpierw napraw błąd odczytu profili."; return; } using(var window=new SequenceForm(false,library.Active.Copy().Sequence,delegate(SequenceDocument document) { library.Active.Sequence=document; if(!SaveProfiles()) throw new IOException("Nie udało się zapisać sekwencji w profilu."); })) { sequenceWindow=window; try { window.ShowDialog(this); } finally { sequenceWindow=null; } } }
     void Toggle() {
@@ -145,12 +148,25 @@ partial class ClickerForm : GradientForm {
         if(!rules.Exists(delegate(Rule r) { return r.Enabled; })) { status.Text = "Dodaj i włącz przynajmniej jeden wpis."; return; }
         armedAt = monotonic.Elapsed.TotalSeconds + 3;
         foreach(var r in rules) { r.Next = armedAt + r.Seconds + RandomDelay(r, random); r.Pending = false; r.Count = 0; }
-        listPaused=false; running = true; timer.Interval = 10; editor.Enabled = false; grid.ReadOnly = true; start.Text = "Stop   ·   F8"; if(autoCompact.Checked) SetCompact(true); RenderV2();
+        listPaused=false; manualPaused=false; running = true; timer.Interval = 10; editor.Enabled = false; grid.ReadOnly = true; start.Text = "Stop   ·   F8"; if(autoCompact.Checked) SetCompact(true); RenderV2();
     }
-    void Stop(string message) { running = false; listPaused=false; try { held.Release(0, true); } catch(Exception ex) { message = "Nie udało się zwolnić klawisza: " + ex.Message; } timer.Interval = held.Count == 0 ? 250 : 10; foreach(var r in rules) r.Pending = false; editor.Enabled = true; grid.ReadOnly = false; start.Text = "Start   ·   F8"; status.Text = message; UpdateRows(DateTime.Now); RenderV2(); }
+    public static void ShiftPendingDeadlines(List<Rule> source,double seconds) { if(source==null || seconds<=0) return; foreach(var rule in source) if(!rule.IsPause && (rule.Mode==Interval || rule.Pending)) rule.Next+=seconds; }
+    void ToggleManualPause() {
+        if(!running) { status.Text="Najpierw uruchom harmonogram."; return; }
+        double now=monotonic.Elapsed.TotalSeconds;
+        if(!manualPaused) {
+            try { held.Release(now,true); } catch(Exception ex) { Stop(ex.Message); return; }
+            manualPaused=true; manualPausedAt=now; status.Text="Pauza ręczna. F7 lub Wznów kontynuuje odliczanie; F9 zatrzymuje.";
+        } else {
+            ShiftPendingDeadlines(rules,now-manualPausedAt); manualPaused=false; status.Text="Wznowiono po ręcznej pauzie — odliczanie jest kontynuowane.";
+        }
+        RenderV2();
+    }
+    void Stop(string message) { running = false; listPaused=false; manualPaused=false; try { held.Release(0, true); } catch(Exception ex) { message = "Nie udało się zwolnić klawisza: " + ex.Message; } timer.Interval = held.Count == 0 ? 250 : 10; foreach(var r in rules) r.Pending = false; editor.Enabled = true; grid.ReadOnly = false; start.Text = "Start   ·   F8"; status.Text = message; UpdateRows(DateTime.Now); RenderV2(); }
     public static int RandomHold(Rule r, Random source) { return source.Next(r.HoldMinMs, r.HoldMaxMs + 1); }
     public static double RandomDelay(Rule r, Random source) { return source.Next(r.MaxDelayMs + 1) / 1000.0; }
     public static bool DueDaily(Rule r, DateTime now) { DateTime due = now.Date + TimeSpan.Parse(r.Time); return r.LastDay != now.Date && now >= due && (now-due).TotalSeconds < 2; }
+    public static bool ShouldRunDuringPause(Rule r) { return r!=null && r.Enabled && !r.IsPause && r.AllowDuringPause; }
     void LoadPause() {
         string oldPath=Path.Combine(Path.GetDirectoryName(path),"pause.xml");
         if(!File.Exists(oldPath) || File.Exists(oldPath+".migrated")) return;
@@ -185,31 +201,39 @@ partial class ClickerForm : GradientForm {
             return false;
         } catch(Exception ex) { Stop("Wstrzymanie: "+ex.Message); return true; }
     }
+    void RunDueRules(DateTime now,double elapsed,bool ownWindow,bool mastersOnly) {
+        foreach(var r in rules) {
+            if(!r.Enabled || r.IsPause || (mastersOnly && !r.AllowDuringPause)) continue;
+            if(r.Mode == Daily && !r.Pending && DueDaily(r, now)) {
+                r.LastDay = now.Date;
+                r.Pending = true;
+                r.Next = elapsed + RandomDelay(r, random);
+            }
+            bool due = (r.Mode == Interval || r.Pending) && elapsed >= r.Next;
+            if(!due) continue;
+            if(r.Mode == Interval) r.Next = elapsed + r.Seconds + RandomDelay(r, random);
+            else r.Pending = false;
+            if(ownWindow) continue;
+            try { if(MouseInput.IsMouse(r.Key)) { if(held.MouseHeld) continue; MouseInput.Move(new Point(r.MouseX,r.MouseY)); } if(held.Begin(r.Key, monotonic.Elapsed.TotalSeconds, RandomHold(r, random))) r.Count++; }
+            catch(Exception ex) { Stop(ex.Message); break; }
+        }
+    }
     void Tick() {
         DateTime now = DateTime.Now; double elapsed = monotonic.Elapsed.TotalSeconds;
         try { held.Release(elapsed, !running); } catch(Exception ex) { Stop(ex.Message); }
 
         if(running && elapsed < armedAt) status.Text = "Start za " + Math.Ceiling(armedAt-elapsed) + " s — wybierz okno docelowe.";
+        else if(running && manualPaused) status.Text="Pauza ręczna · "+(elapsed-manualPausedAt).ToString("0.0")+" s. F7 wznawia, F9 zatrzymuje.";
         else if(running) {
             bool ownWindow = Form.ActiveForm != null || Keyboard.GetForegroundWindow() == Handle;
-            if(!HandlePause(now, elapsed, ownWindow)) {
-            status.Text = ownWindow ? "Wstrzymano wysyłanie: wybierz inne okno. F9 zatrzymuje." : "Działa — F9 zatrzymuje. Godziny są wykonywane codziennie.";
-            foreach(var r in rules) {
-                if(!r.Enabled || r.IsPause) continue;
-                if(r.Mode == Daily && !r.Pending && DueDaily(r, now)) {
-                    r.LastDay = now.Date;
-                    r.Pending = true;
-                    r.Next = elapsed + RandomDelay(r, random);
-                }
-                bool due = (r.Mode == Interval || r.Pending) && elapsed >= r.Next;
-                if(!due) continue;
-                if(r.Mode == Interval) r.Next = elapsed + r.Seconds + RandomDelay(r, random);
-                else r.Pending = false;
-                if(ownWindow) continue;
-                try { if(MouseInput.IsMouse(r.Key)) { if(held.MouseHeld) continue; MouseInput.Move(new Point(r.MouseX,r.MouseY)); } if(held.Begin(r.Key, monotonic.Elapsed.TotalSeconds, RandomHold(r, random))) r.Count++; }
-                catch(Exception ex) { Stop(ex.Message); break; }
+            bool pauseChangedOrActive=HandlePause(now, elapsed, ownWindow);
+            if(!pauseChangedOrActive) {
+                status.Text = ownWindow ? "Wstrzymano wysyłanie: wybierz inne okno. F9 zatrzymuje." : "Działa — F9 zatrzymuje. Godziny są wykonywane codziennie.";
+                RunDueRules(now,elapsed,ownWindow,false);
+            } else if(listPaused) {
+                status.Text=ownWindow ? "Wstrzymano do "+listPauseUntil.ToString("dd.MM HH:mm:ss")+". Master czeka na inne okno." : "Wstrzymano do "+listPauseUntil.ToString("dd.MM HH:mm:ss")+". Działa wpis master.";
+                RunDueRules(now,elapsed,ownWindow,true);
             }
-        }
         }
         if(elapsed >= nextUiUpdate) { nextUiUpdate = elapsed + .1; clock.Text = "Zegar lokalny · " + now.ToString("HH:mm:ss"); UpdateRows(now); RenderV2(); }
     }
@@ -218,7 +242,7 @@ partial class ClickerForm : GradientForm {
         try {
             grid.Rows.Clear();
             foreach(var r in rules) {
-                string action=r.IsPause?"Wstrzymaj":KeyPicker.DisplayName(r.Key)+(MouseInput.IsMouse(r.Key)?" ("+r.MouseX+", "+r.MouseY+")":"");
+                string action=r.IsPause?"Wstrzymaj":KeyPicker.DisplayName(r.Key)+(MouseInput.IsMouse(r.Key)?" ("+r.MouseX+", "+r.MouseY+")":"")+(r.AllowDuringPause?"  ★ Master":"");
                 string schedule=r.IsPause?"Od "+r.Time+(r.PauseByDuration?" na "+r.PauseMinutes+" min":" do "+r.PauseEnd):(r.Mode==Interval?"Co "+r.Seconds+" s":"Codziennie "+r.Time)+" + 0–"+r.MaxDelayMs+" ms; trzymaj "+(r.HoldMinMs==r.HoldMaxMs?r.HoldMaxMs.ToString():r.HoldMinMs+"–"+r.HoldMaxMs)+" ms";
                 grid.Rows.Add(r.Enabled,action,schedule,"—",r.IsPause?(object)"—":r.Count);
             }
@@ -228,11 +252,14 @@ partial class ClickerForm : GradientForm {
         for(int i=0;i<rules.Count;i++) {
             Rule r=rules[i]; string next="—";
             if(running && r.Enabled) {
+                if(manualPaused) next="Pauza ręczna";
+                else {
                 var pauseEnd=r.IsPause?ScheduledPause.EndAt(r,now):null;
                 if(pauseEnd.HasValue) next="Do "+pauseEnd.Value.ToString("HH:mm:ss");
                 else if(listPaused && !r.IsPause) next="Wstrzymano";
                 else if(!r.IsPause && (r.Mode==Interval || r.Pending)) next="Za "+Math.Max(0,r.Next-monotonic.Elapsed.TotalSeconds).ToString("0.0")+" s";
                 else { DateTime d=now.Date+TimeSpan.Parse(r.Time); if(d<now || (!r.IsPause && r.LastDay==now.Date)) d=d.AddDays(1); next=d.ToString("dd.MM HH:mm:ss"); }
+                }
             }
             if(!Equals(grid.Rows[i].Cells[3].Value,next)) grid.Rows[i].Cells[3].Value=next;
             object count=r.IsPause?(object)"—":r.Count;
@@ -254,7 +281,7 @@ partial class ClickerForm : GradientForm {
 
 class EditRule : GradientForm {
     public EditRule(Rule rule, List<string> names, bool isNew=false) {
-        Text="Edytuj wpis"; ClientSize=new Size(440,450); FormBorderStyle=FormBorderStyle.FixedDialog; MaximizeBox=false; MinimizeBox=false; StartPosition=FormStartPosition.CenterParent; Font=new Font("Segoe UI",10);
+        Text="Edytuj wpis"; ClientSize=new Size(440,480); FormBorderStyle=FormBorderStyle.FixedDialog; MaximizeBox=false; MinimizeBox=false; StartPosition=FormStartPosition.CenterParent; Font=new Font("Segoe UI",10);
         var key=new KeyPicker { Left=170,Top=16,Width=240,SelectedKey=rule.Key };
         var mode=new ComboBox { Left=170,Top=60,Width=170,DropDownStyle=ComboBoxStyle.DropDownList }; mode.Items.AddRange(new object[]{"Co ile sekund","O godzinie"}); mode.SelectedItem=rule.Mode;
         var seconds=new NumericUpDown { Left=170,Top=100,Width=170,DecimalPlaces=2,Minimum=.05m,Maximum=86400,Value=(decimal)rule.Seconds };
@@ -266,10 +293,12 @@ class EditRule : GradientForm {
         if(!isNew && rule.HoldMinMs!=rule.HoldMaxMs) Controls.Add(new Label { Text="Stary zakres: "+rule.HoldMinMs+"–"+rule.HoldMaxMs+" ms. Zapis ustawi stały czas.",Left=20,Top=260,Width=400,Height=24,Font=new Font("Segoe UI",8) });
         string[] labels={"Klawisz","Tryb","Sekundy","Godzina lokalna"}; for(int i=0;i<4;i++) Controls.Add(new Label { Text=labels[i],Left=20,Top=24+40*i,AutoSize=true });
         Controls.AddRange(new Control[]{key,mode,seconds,time});
+        var master=new CheckBox { Text="Master: działa podczas wstrzymania",Left=20,Top=300,Width=390,Checked=rule.AllowDuringPause };
+        Controls.Add(master);
         Point point=new Point(rule.MouseX,rule.MouseY); bool pointConfigured=!isNew && MouseInput.IsMouse(rule.Key);
-        var pointButton=new ModernButton { Text="Punkt myszy…",Left=240,Top=305,Width=170,Enabled=MouseInput.IsMouse(key.SelectedKey) }; pointButton.Click+=delegate { using(var dialog=new MousePointDialog(point)) { if(dialog.ShowDialog(this)==DialogResult.OK) { point=dialog.SelectedPoint; pointConfigured=true; pointButton.Text="X: "+point.X+"  Y: "+point.Y; } } }; Controls.Add(pointButton); key.SelectedKeyChanged+=delegate { pointButton.Enabled=MouseInput.IsMouse(key.SelectedKey); };
-        var ok=new ModernButton { Primary=true, Text="Zapisz",Left=150,Top=395,Width=90 }; ok.Click+=delegate { if(MouseInput.IsMouse(key.SelectedKey) && !pointConfigured) { MessageBox.Show(this,"Najpierw wybierz Punkt myszy…"); return; } rule.MouseX=point.X; rule.MouseY=point.Y; rule.Key=key.SelectedKey; rule.Mode=mode.Text; rule.Seconds=(double)seconds.Value; rule.Time=time.Value.ToString("HH:mm:ss"); rule.MaxDelayMs=(int)delay.Value; rule.HoldMinMs=rule.HoldMaxMs=(int)hold.Value; DialogResult=DialogResult.OK; }; Controls.Add(ok);
-        var cancel=new ModernButton { Text="Anuluj",Left=250,Top=395,Width=90,DialogResult=DialogResult.Cancel }; Controls.Add(cancel); AcceptButton=ok; CancelButton=cancel; Theme.Inputs(this); NumericSlider.AddToDialog(this);
+        var pointButton=new ModernButton { Text="Punkt myszy…",Left=240,Top=340,Width=170,Enabled=MouseInput.IsMouse(key.SelectedKey) }; pointButton.Click+=delegate { using(var dialog=new MousePointDialog(point)) { if(dialog.ShowDialog(this)==DialogResult.OK) { point=dialog.SelectedPoint; pointConfigured=true; pointButton.Text="X: "+point.X+"  Y: "+point.Y; } } }; Controls.Add(pointButton); key.SelectedKeyChanged+=delegate { pointButton.Enabled=MouseInput.IsMouse(key.SelectedKey); };
+        var ok=new ModernButton { Primary=true, Text="Zapisz",Left=150,Top=430,Width=90 }; ok.Click+=delegate { if(MouseInput.IsMouse(key.SelectedKey) && !pointConfigured) { MessageBox.Show(this,"Najpierw wybierz Punkt myszy…"); return; } rule.MouseX=point.X; rule.MouseY=point.Y; rule.Key=key.SelectedKey; rule.Mode=mode.Text; rule.Seconds=(double)seconds.Value; rule.Time=time.Value.ToString("HH:mm:ss"); rule.MaxDelayMs=(int)delay.Value; rule.HoldMinMs=rule.HoldMaxMs=(int)hold.Value; rule.AllowDuringPause=master.Checked; DialogResult=DialogResult.OK; }; Controls.Add(ok);
+        var cancel=new ModernButton { Text="Anuluj",Left=250,Top=430,Width=90,DialogResult=DialogResult.Cancel }; Controls.Add(cancel); AcceptButton=ok; CancelButton=cancel; Theme.Inputs(this); NumericSlider.AddToDialog(this);
     }
 }
 

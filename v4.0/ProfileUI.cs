@@ -6,6 +6,8 @@ using System.Windows.Forms;
 partial class ClickerForm {
     ProfileLibrary library;
     ModernButton profilesButton;
+    ComboBox profilePicker;
+    bool updatingProfilePicker;
     readonly string profilesPath=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"FlickerV4","profiles.xml");
     void LoadProfiles() {
         if(previewOnly) return;
@@ -26,7 +28,26 @@ partial class ClickerForm {
         try { library.Active.Rules.Clear(); foreach(var r in rules) library.Active.Rules.Add(CopyRule(r)); library.Validate(); ProfileFiles.Write(profilesPath,library); return true; }
         catch(Exception ex) { status.Text="Nie udało się zapisać profilu: "+ex.Message; return false; }
     }
-    void UpdateProfileLabel() { if(profilesButton!=null) profilesButton.Text="Profile: "+(library==null?"Domyślny":library.Active.Name); }
+    void UpdateProfileLabel() {
+        if(profilesButton!=null) profilesButton.Text="Zarządzaj profilami";
+        if(profilePicker==null) return;
+        updatingProfilePicker=true;
+        try {
+            profilePicker.Items.Clear();
+            if(library!=null) foreach(var profile in library.Ordered()) profilePicker.Items.Add(profile);
+            if(library!=null) profilePicker.SelectedItem=library.Active;
+        } finally { updatingProfilePicker=false; }
+    }
+    void SelectProfile(FlickerProfile profile) {
+        if(profile==null || library==null || profile.Id==library.ActiveId) return;
+        if(running || held.Count>0) { status.Text="Zatrzymaj działanie przed zmianą profilu."; UpdateProfileLabel(); return; }
+        if(!Save()) { UpdateProfileLabel(); return; }
+        library.ActiveId=profile.Id;
+        rules.Clear(); foreach(var rule in library.Active.Rules) rules.Add(CopyRule(rule));
+        RefreshRows(); RenderV2();
+        if(SaveProfiles()) status.Text="Wybrano profil: "+library.Active.Name;
+        else UpdateProfileLabel();
+    }
     void ManageProfiles() {
         if(running || held.Count>0) { status.Text="Zatrzymaj działanie przed zmianą profilu."; return; }
         if(!Save()) return;
@@ -54,6 +75,7 @@ class ProfilesDialog : GradientForm {
         details.Dock=DockStyle.Fill; details.ForeColor=Theme.Muted; layout.Controls.Add(details,0,2);
         var actions=new FlowLayoutPanel { Dock=DockStyle.Fill,WrapContents=false };
         actions.Controls.Add(Button("Nowy",delegate { NameEdit(false,false); })); actions.Controls.Add(Button("Kopia",delegate { NameEdit(true,false); })); actions.Controls.Add(Button("Nazwa",delegate { NameEdit(false,true); }));
+        actions.Controls.Add(Button("Przypnij",delegate { var p=Selected; if(p==null) return; p.Pinned=!p.Pinned; RefreshList(p.Id); }));
         actions.Controls.Add(Button("Usuń",delegate { var p=Selected; if(p==null || Result.Profiles.Count==1) return; if(MessageBox.Show(this,"Usunąć profil „"+p.Name+"”?","Usuwanie profilu",MessageBoxButtons.YesNo,MessageBoxIcon.Question)!=DialogResult.Yes) return; Result.Profiles.Remove(p); if(Result.ActiveId==p.Id) Result.ActiveId=Result.Profiles[0].Id; RefreshList(Result.ActiveId); }));
         actions.Controls.Add(Button("Importuj",delegate { Import(); })); actions.Controls.Add(Button("Eksportuj",delegate { Export(); })); layout.Controls.Add(actions,0,3);
         var footer=new FlowLayoutPanel { Dock=DockStyle.Fill,WrapContents=false };
@@ -62,9 +84,9 @@ class ProfilesDialog : GradientForm {
         RefreshList(Result.ActiveId);
     }
     FlickerProfile Selected { get { return list.SelectedItem as FlickerProfile; } }
-    ModernButton Button(string label,EventHandler action) { var b=new ModernButton { Text=label,Width=92,Height=36,Margin=new Padding(0,5,6,0) }; b.Click+=action; return b; }
-    void RefreshList(string id) { list.Items.Clear(); foreach(var p in Result.Profiles) { list.Items.Add(p); if(p.Id==id) list.SelectedItem=p; } Describe(); }
-    void Describe() { var p=Selected; details.Text=p==null?"":p.Rules.Count+" akcji · "+p.Sequence.Steps.Count+" kroków · "+p.Sequence.Repeats+" powtórzeń\nZastosuj profil zapisuje zmiany. Anuluj je odrzuca."; }
+    ModernButton Button(string label,EventHandler action) { var b=new ModernButton { Text=label,Width=84,Height=36,Margin=new Padding(0,5,6,0) }; b.Click+=action; return b; }
+    void RefreshList(string id) { list.Items.Clear(); foreach(var p in Result.Ordered()) { list.Items.Add(p); if(p.Id==id) list.SelectedItem=p; } Describe(); }
+    void Describe() { var p=Selected; details.Text=p==null?"":p.Rules.Count+" akcji · "+p.Sequence.Steps.Count+" kroków · "+p.Sequence.Repeats+" powtórzeń"+(p.Pinned?" · przypięty":"")+"\nZastosuj profil zapisuje zmiany. Anuluj je odrzuca."; }
     void NameEdit(bool duplicate,bool rename) {
         var selected=Selected; if((duplicate || rename) && selected==null) return;
         using(var dialog=new ProfileNameDialog(rename?selected.Name:Result.UniqueName(duplicate?selected.Name+" — kopia":"Nowy profil"))) {

@@ -89,6 +89,18 @@ static class ScheduleTests {
         var duplicate=ClickerForm.CopyRule(original);
         Check(duplicate.Key==original.Key && duplicate.MouseX==-200 && duplicate.MaxDelayMs==800,"V2 duplicate configuration");
         Check(duplicate.Count==0 && duplicate.Next==0 && !duplicate.Pending,"V2 duplicate resets runtime state");
+        original.AllowDuringPause=true; duplicate=ClickerForm.CopyRule(original);
+        Check(duplicate.AllowDuringPause && ClickerForm.ShouldRunDuringPause(duplicate),"Master setting copied and enabled");
+        duplicate.Enabled=false; Check(!ClickerForm.ShouldRunDuringPause(duplicate),"Disabled master is not executed");
+        Check(!ClickerForm.ShouldRunDuringPause(new Rule { IsPause=true,AllowDuringPause=true }),"Pause row cannot become master action");
+        var ordered=new List<Rule> { new Rule { Key="A",Count=1 },new Rule { Key="B",Count=2 },new Rule { Key="C",Count=3 },new Rule { Key="D",Count=4 } };
+        Check(ClickerForm.MoveRule(ordered,0,3) && ordered[0].Key=="B" && ordered[3].Key=="A","Move first rule to end");
+        Check(ClickerForm.MoveRule(ordered,3,1) && ordered[1].Key=="A" && ordered[1].Count==1,"Move keeps rule runtime state");
+        Check(!ClickerForm.MoveRule(ordered,-1,0) && !ClickerForm.MoveRule(ordered,0,4) && !ClickerForm.MoveRule(ordered,2,2),"Invalid moves do nothing");
+        var pausedRules=new List<Rule> { new Rule { Key="A",Mode="Co ile sekund",Next=10 },new Rule { Key="B",Mode="O godzinie",Pending=true,Next=20 },new Rule { IsPause=true,Next=30 } };
+        ClickerForm.ShiftPendingDeadlines(pausedRules,12.5);
+        Check(pausedRules[0].Next==22.5 && pausedRules[1].Next==32.5 && pausedRules[2].Next==30,"Manual pause preserves active deadlines");
+        ClickerForm.ShiftPendingDeadlines(pausedRules,0); Check(pausedRules[0].Next==22.5,"Zero pause does not change deadline");
         using(var dashboard=new ClickerForm(true)) {
             var size=dashboard.Size;
             dashboard.SetCompact(true); Check(dashboard.Width==480 && dashboard.Height==280,"V2 compact dimensions");
